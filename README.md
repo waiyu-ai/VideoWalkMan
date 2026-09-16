@@ -2,6 +2,8 @@
 
 SwiftUI iOS app for building video playlists from the Photos library. Built with **Apple frameworks only** (no CocoaPods, SPM, or binary libraries).
 
+**GitHub repository:** [waiyu-ai/VideoWalkMan](https://github.com/waiyu-ai/VideoWalkMan) (private). Local Xcode / CI target name remains `VideoPlaylist`.
+
 ## Requirements
 
 - iOS 16.0+
