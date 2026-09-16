@@ -1,0 +1,24 @@
+# Xcode / XcodeGen
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Build products
+build/
+*.ipa
+*.xcarchive
+Payload/
+
+# Package managers (must remain unused)
+Pods/
+Carthage/
+.SwiftPM/
+Package.resolved
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/

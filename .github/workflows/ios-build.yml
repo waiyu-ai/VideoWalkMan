@@ -1,0 +1,91 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify binary-free project
+        run: |
+          echo "--- scanning for binary artifacts ---"
+          FOUND=$(find . \
+            \( -name "*.framework" -o -name "*.xcframework" \
+               -o -name "*.a" -o -name "*.dylib" \) \
+            -not -path "*/DerivedData/*" -not -path "./.git/*" || true)
+          if [ -n "$FOUND" ]; then
+            echo "ERROR: binary artifacts found:"; echo "$FOUND"; exit 1
+          fi
+
+          echo "--- scanning Swift imports ---"
+          INVALID=$(grep -Rh "^import " --include="*.swift" . \
+            | sed 's/^import[[:space:]]*//' \
+            | sort -u \
+            | grep -vE "^(SwiftUI|UIKit|Foundation|Photos|PhotosUI|AVKit|AVFoundation|UniformTypeIdentifiers|OSLog|Combine)$" \
+            || true)
+          if [ -n "$INVALID" ]; then
+            echo "ERROR: non-Apple imports found:"; echo "$INVALID"; exit 1
+          fi
+
+          echo "--- scanning for package managers ---"
+          if [ -f Podfile ] || [ -f Cartfile ] || [ -f Package.swift ]; then
+            echo "ERROR: package manager files present"; exit 1
+          fi
+
+          echo "All checks passed."
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build archive (unsigned)
+        run: |
+          xcodebuild archive \
+            -project VideoPlaylist.xcodeproj \
+            -scheme VideoPlaylist \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/VideoPlaylist.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            | xcpretty || xcodebuild archive \
+            -project VideoPlaylist.xcodeproj \
+            -scheme VideoPlaylist \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/VideoPlaylist.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned IPA
+        run: |
+          APP="$RUNNER_TEMP/VideoPlaylist.xcarchive/Products/Applications/VideoPlaylist.app"
+          if [ ! -d "$APP" ]; then
+            echo "ERROR: app bundle not found at $APP"
+            ls -R "$RUNNER_TEMP/VideoPlaylist.xcarchive/Products" || true
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qr VideoPlaylist-unsigned.ipa Payload
+          ls -lh VideoPlaylist-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoPlaylist-unsigned-ipa
+          path: ${{ runner.temp }}/VideoPlaylist-unsigned.ipa
+          retention-days: 30
